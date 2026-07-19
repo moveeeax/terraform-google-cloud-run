@@ -9,7 +9,7 @@ allow public unauthenticated access.
 
 ```hcl
 module "cloud_run" {
-  source = "github.com/cybercapybara/terraform-google-cloud-run"
+  source = "github.com/moveeeax/terraform-google-cloud-run"
 
   project_id = var.project_id
   name       = "api"
