@@ -19,6 +19,10 @@ resource "google_cloud_run_v2_service" "this" {
   labels   = var.labels
   ingress  = var.ingress
 
+  # google >= 6.0 defaults this to true, which makes `terraform destroy` (and any
+  # change that forces replacement) fail until it is turned off and applied.
+  deletion_protection = var.deletion_protection
+
   template {
     # Leaving this null makes Cloud Run fall back to the Compute Engine default
     # service account, which holds roles/editor on the whole project. The
