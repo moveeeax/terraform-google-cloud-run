@@ -166,3 +166,13 @@ variable "labels" {
   type        = map(string)
   default     = {}
 }
+
+variable "deletion_protection" {
+  description = <<-EOT
+    Whether Terraform is prevented from destroying or replacing the service.
+    Defaults to true, the google provider's own default since 6.0. To destroy
+    the service, set this to false and apply first, then destroy.
+  EOT
+  type        = bool
+  default     = true
+}

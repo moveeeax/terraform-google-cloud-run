@@ -18,7 +18,7 @@ resource "google_service_account" "api" {
 }
 
 module "cloud_run" {
-  source = "github.com/moveeeax/terraform-google-cloud-run"
+  source = "github.com/moveeeax/terraform-google-cloud-run?ref=v1.0.0"
 
   project_id      = var.project_id
   name            = "api"
@@ -81,7 +81,19 @@ service account `roles/secretmanager.secretAccessor` on each secret.
 | Name      | Version  |
 |-----------|----------|
 | terraform | >= 1.5   |
-| google    | >= 5.0   |
+| google    | >= 6.0, < 9.0 |
+
+The floor is 6.0 because the module sets `deletion_protection` on
+`google_cloud_run_v2_service`, a field that provider release added (with a
+default of `true`). CI validates and tests against 6.0.0 and the latest 8.x
+release; 9.x is excluded until it has been tested.
+
+## Deletion protection
+
+`deletion_protection` defaults to `true`, as in the google provider since 6.0:
+Terraform refuses to destroy or replace the service. To remove it, set
+`deletion_protection = false`, run `terraform apply`, and then
+`terraform destroy`.
 
 The test suite under [`tests/`](tests) additionally needs Terraform >= 1.7 for
 `mock_provider`. That is a requirement of the tests only.
@@ -107,6 +119,7 @@ The test suite under [`tests/`](tests) additionally needs Terraform >= 1.7 for
 | `allow_unauthenticated`         | Grant `roles/run.invoker` to `allUsers` (public internet access).           | `bool`                                                        | `false`                                        |    no    |
 | `invokers`                      | IAM principals granted `roles/run.invoker` on the service.                 | `list(string)`                                                | `[]`                                           |    no    |
 | `labels`                        | Labels applied to the service.                                             | `map(string)`                                                 | `{}`                                           |    no    |
+| `deletion_protection`           | Prevent Terraform from destroying or replacing the service. Set `false` and apply before destroying. | `bool` | `true` | no |
 
 ## Outputs
 

@@ -265,3 +265,23 @@ run "rejects_zero_max_instance_count" {
 
   expect_failures = [var.max_instance_count]
 }
+
+## Deletion protection ---------------------------------------------------------
+
+run "deletion_protection_defaults_on" {
+  assert {
+    condition     = google_cloud_run_v2_service.this.deletion_protection == true
+    error_message = "deletion_protection must default to true, matching the google provider."
+  }
+}
+
+run "deletion_protection_can_be_disabled" {
+  variables {
+    deletion_protection = false
+  }
+
+  assert {
+    condition     = google_cloud_run_v2_service.this.deletion_protection == false
+    error_message = "deletion_protection = false must be passed through so the service can be destroyed."
+  }
+}
