@@ -90,6 +90,80 @@ resource "google_cloud_run_v2_service" "this" {
           }
         }
       }
+
+      # Health probes. The probe kind follows from the input: grpc_service set means a
+      # gRPC health check, path set means an HTTP GET, neither means a TCP connect.
+      # With startup_probe null the block is omitted and Cloud Run keeps its own
+      # default TCP startup probe; with liveness_probe null there is none.
+      dynamic "startup_probe" {
+        for_each = var.startup_probe == null ? [] : [var.startup_probe]
+        content {
+          initial_delay_seconds = startup_probe.value.initial_delay_seconds
+          timeout_seconds       = startup_probe.value.timeout_seconds
+          period_seconds        = startup_probe.value.period_seconds
+          failure_threshold     = startup_probe.value.failure_threshold
+
+          dynamic "http_get" {
+            for_each = startup_probe.value.grpc_service == null && startup_probe.value.path != null ? [startup_probe.value] : []
+            content {
+              path = http_get.value.path
+              port = http_get.value.port
+            }
+          }
+
+          dynamic "grpc" {
+            for_each = startup_probe.value.grpc_service != null ? [startup_probe.value] : []
+            content {
+              service = grpc.value.grpc_service
+              port    = grpc.value.port
+            }
+          }
+
+          dynamic "tcp_socket" {
+            for_each = startup_probe.value.grpc_service == null && startup_probe.value.path == null ? [startup_probe.value] : []
+            content {
+              # The provider requires a port for liveness TCP probes; fall back to
+              # the container port for both kinds.
+              port = coalesce(tcp_socket.value.port, var.port)
+            }
+          }
+        }
+      }
+
+      dynamic "liveness_probe" {
+        for_each = var.liveness_probe == null ? [] : [var.liveness_probe]
+        content {
+          initial_delay_seconds = liveness_probe.value.initial_delay_seconds
+          timeout_seconds       = liveness_probe.value.timeout_seconds
+          period_seconds        = liveness_probe.value.period_seconds
+          failure_threshold     = liveness_probe.value.failure_threshold
+
+          dynamic "http_get" {
+            for_each = liveness_probe.value.grpc_service == null && liveness_probe.value.path != null ? [liveness_probe.value] : []
+            content {
+              path = http_get.value.path
+              port = http_get.value.port
+            }
+          }
+
+          dynamic "grpc" {
+            for_each = liveness_probe.value.grpc_service != null ? [liveness_probe.value] : []
+            content {
+              service = grpc.value.grpc_service
+              port    = grpc.value.port
+            }
+          }
+
+          dynamic "tcp_socket" {
+            for_each = liveness_probe.value.grpc_service == null && liveness_probe.value.path == null ? [liveness_probe.value] : []
+            content {
+              # The provider requires a port for liveness TCP probes; fall back to
+              # the container port for both kinds.
+              port = coalesce(tcp_socket.value.port, var.port)
+            }
+          }
+        }
+      }
     }
   }
 

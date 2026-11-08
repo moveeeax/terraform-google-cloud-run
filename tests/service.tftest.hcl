@@ -403,3 +403,165 @@ run "rejects_network_tags_with_connector" {
 
   expect_failures = [var.vpc_access]
 }
+
+## Probes -----------------------------------------------------------------------
+
+run "probes_are_off_by_default" {
+  command = plan
+
+  assert {
+    condition     = length(google_cloud_run_v2_service.this.template[0].containers[0].liveness_probe) == 0
+    error_message = "With liveness_probe unset the module must not add a liveness probe."
+  }
+}
+
+run "http_startup_probe" {
+  command = plan
+
+  variables {
+    startup_probe = {
+      path                  = "/healthz"
+      initial_delay_seconds = 5
+      failure_threshold     = 10
+    }
+  }
+
+  assert {
+    condition     = google_cloud_run_v2_service.this.template[0].containers[0].startup_probe[0].http_get[0].path == "/healthz"
+    error_message = "startup_probe.path must render an http_get probe."
+  }
+
+  assert {
+    condition     = length(google_cloud_run_v2_service.this.template[0].containers[0].startup_probe[0].tcp_socket) == 0 && length(google_cloud_run_v2_service.this.template[0].containers[0].startup_probe[0].grpc) == 0
+    error_message = "An HTTP probe must not also render tcp_socket or grpc."
+  }
+
+  assert {
+    condition     = google_cloud_run_v2_service.this.template[0].containers[0].startup_probe[0].initial_delay_seconds == 5 && google_cloud_run_v2_service.this.template[0].containers[0].startup_probe[0].failure_threshold == 10
+    error_message = "Probe timings must be passed through."
+  }
+
+  assert {
+    condition     = google_cloud_run_v2_service.this.template[0].containers[0].startup_probe[0].period_seconds == 10 && google_cloud_run_v2_service.this.template[0].containers[0].startup_probe[0].timeout_seconds == 1
+    error_message = "period_seconds and timeout_seconds must default to the Cloud Run defaults (10 and 1)."
+  }
+}
+
+run "tcp_startup_probe_uses_container_port" {
+  command = plan
+
+  variables {
+    port          = 9000
+    startup_probe = {}
+  }
+
+  assert {
+    condition     = google_cloud_run_v2_service.this.template[0].containers[0].startup_probe[0].tcp_socket[0].port == 9000
+    error_message = "A probe with neither path nor grpc_service must be a TCP probe on the container port."
+  }
+}
+
+run "grpc_liveness_probe" {
+  command = plan
+
+  variables {
+    liveness_probe = {
+      grpc_service   = ""
+      port           = 50051
+      period_seconds = 30
+    }
+  }
+
+  assert {
+    condition     = google_cloud_run_v2_service.this.template[0].containers[0].liveness_probe[0].grpc[0].service == ""
+    error_message = "grpc_service must render a grpc probe, including the empty whole-server service name."
+  }
+
+  assert {
+    condition     = google_cloud_run_v2_service.this.template[0].containers[0].liveness_probe[0].grpc[0].port == 50051
+    error_message = "liveness_probe.port must reach the grpc probe."
+  }
+
+  assert {
+    condition     = length(google_cloud_run_v2_service.this.template[0].containers[0].liveness_probe[0].http_get) == 0
+    error_message = "A gRPC probe must not also render http_get."
+  }
+}
+
+run "rejects_probe_with_path_and_grpc_service" {
+  command = plan
+
+  variables {
+    liveness_probe = {
+      path         = "/healthz"
+      grpc_service = "app"
+    }
+  }
+
+  expect_failures = [var.liveness_probe]
+}
+
+run "rejects_probe_path_without_leading_slash" {
+  command = plan
+
+  variables {
+    startup_probe = {
+      path = "healthz"
+    }
+  }
+
+  expect_failures = [var.startup_probe]
+}
+
+run "rejects_probe_port_out_of_range" {
+  command = plan
+
+  variables {
+    liveness_probe = {
+      port = 70000
+    }
+  }
+
+  expect_failures = [var.liveness_probe]
+}
+
+run "rejects_startup_probe_period_over_240" {
+  command = plan
+
+  variables {
+    startup_probe = {
+      period_seconds = 300
+    }
+  }
+
+  expect_failures = [var.startup_probe]
+}
+
+run "accepts_liveness_probe_period_over_240" {
+  command = plan
+
+  variables {
+    liveness_probe = {
+      path           = "/healthz"
+      period_seconds = 300
+    }
+  }
+
+  assert {
+    condition     = google_cloud_run_v2_service.this.template[0].containers[0].liveness_probe[0].period_seconds == 300
+    error_message = "Liveness probes allow period_seconds up to 3600."
+  }
+}
+
+run "rejects_probe_timeout_longer_than_period" {
+  command = plan
+
+  variables {
+    liveness_probe = {
+      timeout_seconds = 20
+      period_seconds  = 10
+    }
+  }
+
+  expect_failures = [var.liveness_probe]
+}
