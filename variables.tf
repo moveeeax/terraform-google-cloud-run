@@ -214,3 +214,92 @@ variable "vpc_access" {
     error_message = "vpc_access.network_tags only apply to Direct VPC egress and cannot be combined with connector."
   }
 }
+
+variable "startup_probe" {
+  description = <<-EOT
+    Startup probe for the container. Cloud Run sends no traffic to an instance until it
+    passes. Set `path` for an HTTP GET probe, `grpc_service` for a gRPC health check
+    (`""` checks the server as a whole), or neither for a TCP connect. `port` defaults
+    to the container port. Null (the default) keeps Cloud Run's own default TCP startup
+    probe. `initial_delay_seconds` and `period_seconds` are capped at 240.
+  EOT
+  type = object({
+    path                  = optional(string)
+    port                  = optional(number)
+    grpc_service          = optional(string)
+    initial_delay_seconds = optional(number, 0)
+    timeout_seconds       = optional(number, 1)
+    period_seconds        = optional(number, 10)
+    failure_threshold     = optional(number, 3)
+  })
+  default = null
+
+  validation {
+    condition     = var.startup_probe == null ? true : (var.startup_probe.path == null || var.startup_probe.grpc_service == null)
+    error_message = "startup_probe can be an HTTP probe (path) or a gRPC probe (grpc_service), not both."
+  }
+
+  validation {
+    condition     = var.startup_probe == null ? true : (var.startup_probe.path == null ? true : startswith(var.startup_probe.path, "/"))
+    error_message = "startup_probe.path must start with \"/\", e.g. \"/healthz\"."
+  }
+
+  validation {
+    condition     = var.startup_probe == null ? true : (var.startup_probe.port == null ? true : (var.startup_probe.port >= 1 && var.startup_probe.port <= 65535))
+    error_message = "startup_probe.port must be between 1 and 65535."
+  }
+
+  validation {
+    condition = var.startup_probe == null ? true : (
+      var.startup_probe.initial_delay_seconds >= 0 && var.startup_probe.initial_delay_seconds <= 240 &&
+      var.startup_probe.period_seconds >= 1 && var.startup_probe.period_seconds <= 240 &&
+      var.startup_probe.timeout_seconds >= 1 && var.startup_probe.timeout_seconds <= var.startup_probe.period_seconds &&
+      var.startup_probe.failure_threshold >= 1
+    )
+    error_message = "startup_probe: initial_delay_seconds must be 0-240, period_seconds 1-240, timeout_seconds at least 1 and not more than period_seconds, failure_threshold at least 1."
+  }
+}
+
+variable "liveness_probe" {
+  description = <<-EOT
+    Liveness probe for the container. Cloud Run restarts an instance that fails it
+    `failure_threshold` times in a row. Same shape as `startup_probe`: `path` for HTTP
+    GET, `grpc_service` for gRPC, neither for TCP. Null (the default) configures no
+    liveness probe. `initial_delay_seconds` and `period_seconds` are capped at 3600.
+  EOT
+  type = object({
+    path                  = optional(string)
+    port                  = optional(number)
+    grpc_service          = optional(string)
+    initial_delay_seconds = optional(number, 0)
+    timeout_seconds       = optional(number, 1)
+    period_seconds        = optional(number, 10)
+    failure_threshold     = optional(number, 3)
+  })
+  default = null
+
+  validation {
+    condition     = var.liveness_probe == null ? true : (var.liveness_probe.path == null || var.liveness_probe.grpc_service == null)
+    error_message = "liveness_probe can be an HTTP probe (path) or a gRPC probe (grpc_service), not both."
+  }
+
+  validation {
+    condition     = var.liveness_probe == null ? true : (var.liveness_probe.path == null ? true : startswith(var.liveness_probe.path, "/"))
+    error_message = "liveness_probe.path must start with \"/\", e.g. \"/healthz\"."
+  }
+
+  validation {
+    condition     = var.liveness_probe == null ? true : (var.liveness_probe.port == null ? true : (var.liveness_probe.port >= 1 && var.liveness_probe.port <= 65535))
+    error_message = "liveness_probe.port must be between 1 and 65535."
+  }
+
+  validation {
+    condition = var.liveness_probe == null ? true : (
+      var.liveness_probe.initial_delay_seconds >= 0 && var.liveness_probe.initial_delay_seconds <= 3600 &&
+      var.liveness_probe.period_seconds >= 1 && var.liveness_probe.period_seconds <= 3600 &&
+      var.liveness_probe.timeout_seconds >= 1 && var.liveness_probe.timeout_seconds <= var.liveness_probe.period_seconds &&
+      var.liveness_probe.failure_threshold >= 1
+    )
+    error_message = "liveness_probe: initial_delay_seconds must be 0-3600, period_seconds 1-3600, timeout_seconds at least 1 and not more than period_seconds, failure_threshold at least 1."
+  }
+}

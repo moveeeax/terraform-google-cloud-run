@@ -101,6 +101,34 @@ VPC; set `ALL_TRAFFIC` to route everything, for example through Cloud NAT for a
 static outbound IP. `network_tags` work only with Direct VPC egress and are
 useful for targeting firewall rules.
 
+### Health probes
+
+`startup_probe` holds traffic back until the container is ready, and
+`liveness_probe` restarts an instance that stops responding. The probe kind
+follows from what you set: `path` for an HTTP GET, `grpc_service` for a gRPC
+health check (`""` checks the whole server), neither for a TCP connect. `port`
+defaults to the container port.
+
+```hcl
+# A slow-starting app: allow up to 10 s initial delay + 30 x 5 s to come up.
+startup_probe = {
+  path                  = "/healthz"
+  initial_delay_seconds = 10
+  period_seconds        = 5
+  failure_threshold     = 30
+}
+
+liveness_probe = {
+  path           = "/healthz"
+  period_seconds = 30
+}
+```
+
+Both default to `null`. With `startup_probe` unset Cloud Run keeps its own
+default TCP startup probe on the container port; with `liveness_probe` unset
+there is no liveness check. For most HTTP services an HTTP startup probe on a
+readiness endpoint plus an HTTP liveness probe is a reasonable setup.
+
 ## Requirements
 
 | Name      | Version  |
@@ -146,6 +174,8 @@ The test suite under [`tests/`](tests) additionally needs Terraform >= 1.7 for
 | `labels`                        | Labels applied to the service.                                             | `map(string)`                                                 | `{}`                                           |    no    |
 | `deletion_protection`           | Prevent Terraform from destroying or replacing the service. Set `false` and apply before destroying. | `bool` | `true` | no |
 | `vpc_access`                    | Direct VPC egress (`network`, `subnetwork`, `network_tags`) or a VPC connector (`connector`), plus `egress` (`PRIVATE_RANGES_ONLY` or `ALL_TRAFFIC`). | `object({ network = optional(string), subnetwork = optional(string), connector = optional(string), egress = optional(string, "PRIVATE_RANGES_ONLY"), network_tags = optional(list(string), []) })` | `null` | no |
+| `startup_probe`                 | Startup probe: `path` (HTTP), `grpc_service` (gRPC) or neither (TCP), plus `port` and timings. | `object({ path = optional(string), port = optional(number), grpc_service = optional(string), initial_delay_seconds = optional(number, 0), timeout_seconds = optional(number, 1), period_seconds = optional(number, 10), failure_threshold = optional(number, 3) })` | `null` | no |
+| `liveness_probe`                | Liveness probe, same shape as `startup_probe`.                             | same as `startup_probe`                                       | `null`                                         |    no    |
 
 ## Outputs
 
