@@ -176,3 +176,41 @@ variable "deletion_protection" {
   type        = bool
   default     = true
 }
+
+variable "vpc_access" {
+  description = <<-EOT
+    Outbound access to a VPC network, for example to reach Cloud SQL over private IP,
+    Memorystore or an internal load balancer. Set either `network` and/or `subnetwork`
+    for Direct VPC egress, or `connector` (a Serverless VPC Access connector, as
+    `projects/<project>/locations/<region>/connectors/<name>`), not both. `egress` is
+    `PRIVATE_RANGES_ONLY` (only RFC 1918 and other private ranges go through the VPC)
+    or `ALL_TRAFFIC`. `network_tags` are applied to the Direct VPC egress interface and
+    are not available with a connector. Null (the default) leaves the service without
+    VPC access.
+  EOT
+  type = object({
+    network      = optional(string)
+    subnetwork   = optional(string)
+    connector    = optional(string)
+    egress       = optional(string, "PRIVATE_RANGES_ONLY")
+    network_tags = optional(list(string), [])
+  })
+  default = null
+
+  validation {
+    condition = var.vpc_access == null ? true : (
+      (var.vpc_access.connector != null) != (var.vpc_access.network != null || var.vpc_access.subnetwork != null)
+    )
+    error_message = "vpc_access needs exactly one way into the VPC: set connector for a Serverless VPC Access connector, or network and/or subnetwork for Direct VPC egress, but not both."
+  }
+
+  validation {
+    condition     = var.vpc_access == null ? true : contains(["PRIVATE_RANGES_ONLY", "ALL_TRAFFIC"], var.vpc_access.egress)
+    error_message = "vpc_access.egress must be PRIVATE_RANGES_ONLY or ALL_TRAFFIC."
+  }
+
+  validation {
+    condition     = var.vpc_access == null ? true : (var.vpc_access.connector == null || length(var.vpc_access.network_tags) == 0)
+    error_message = "vpc_access.network_tags only apply to Direct VPC egress and cannot be combined with connector."
+  }
+}

@@ -285,3 +285,121 @@ run "deletion_protection_can_be_disabled" {
     error_message = "deletion_protection = false must be passed through so the service can be destroyed."
   }
 }
+
+## VPC access -------------------------------------------------------------------
+
+run "vpc_access_is_off_by_default" {
+  command = plan
+
+  assert {
+    condition     = length(google_cloud_run_v2_service.this.template[0].vpc_access) == 0
+    error_message = "With vpc_access unset the module must not add a vpc_access block, so existing services plan unchanged."
+  }
+}
+
+run "direct_vpc_egress" {
+  command = plan
+
+  variables {
+    vpc_access = {
+      network      = "projects/example-project/global/networks/main"
+      subnetwork   = "projects/example-project/regions/us-central1/subnetworks/run"
+      network_tags = ["cloud-run"]
+    }
+  }
+
+  assert {
+    condition     = google_cloud_run_v2_service.this.template[0].vpc_access[0].egress == "PRIVATE_RANGES_ONLY"
+    error_message = "vpc_access.egress must default to PRIVATE_RANGES_ONLY."
+  }
+
+  assert {
+    condition     = google_cloud_run_v2_service.this.template[0].vpc_access[0].connector == null
+    error_message = "Direct VPC egress must not set a connector."
+  }
+
+  assert {
+    condition     = google_cloud_run_v2_service.this.template[0].vpc_access[0].network_interfaces[0].subnetwork == "projects/example-project/regions/us-central1/subnetworks/run"
+    error_message = "vpc_access.subnetwork must reach the network interface."
+  }
+
+  assert {
+    condition     = google_cloud_run_v2_service.this.template[0].vpc_access[0].network_interfaces[0].tags == tolist(["cloud-run"])
+    error_message = "vpc_access.network_tags must reach the network interface."
+  }
+}
+
+run "vpc_connector" {
+  command = plan
+
+  variables {
+    vpc_access = {
+      connector = "projects/example-project/locations/us-central1/connectors/run"
+      egress    = "ALL_TRAFFIC"
+    }
+  }
+
+  assert {
+    condition     = google_cloud_run_v2_service.this.template[0].vpc_access[0].connector == "projects/example-project/locations/us-central1/connectors/run"
+    error_message = "vpc_access.connector must be passed through."
+  }
+
+  assert {
+    condition     = google_cloud_run_v2_service.this.template[0].vpc_access[0].egress == "ALL_TRAFFIC"
+    error_message = "vpc_access.egress must be passed through."
+  }
+
+  assert {
+    condition     = length(google_cloud_run_v2_service.this.template[0].vpc_access[0].network_interfaces) == 0
+    error_message = "A connector must not also produce a Direct VPC egress interface."
+  }
+}
+
+run "rejects_connector_with_network" {
+  command = plan
+
+  variables {
+    vpc_access = {
+      connector = "projects/example-project/locations/us-central1/connectors/run"
+      network   = "main"
+    }
+  }
+
+  expect_failures = [var.vpc_access]
+}
+
+run "rejects_empty_vpc_access" {
+  command = plan
+
+  variables {
+    vpc_access = {}
+  }
+
+  expect_failures = [var.vpc_access]
+}
+
+run "rejects_invalid_vpc_egress" {
+  command = plan
+
+  variables {
+    vpc_access = {
+      network = "main"
+      egress  = "PRIVATE"
+    }
+  }
+
+  expect_failures = [var.vpc_access]
+}
+
+run "rejects_network_tags_with_connector" {
+  command = plan
+
+  variables {
+    vpc_access = {
+      connector    = "projects/example-project/locations/us-central1/connectors/run"
+      network_tags = ["cloud-run"]
+    }
+  }
+
+  expect_failures = [var.vpc_access]
+}

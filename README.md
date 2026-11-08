@@ -76,6 +76,31 @@ state. Put credentials, tokens and keys in `secret_env` instead — Cloud Run
 resolves them from Secret Manager at runtime. Grant the service's runtime
 service account `roles/secretmanager.secretAccessor` on each secret.
 
+### VPC access
+
+By default the service has no route into your VPC, so it cannot reach Cloud
+SQL over private IP, Memorystore or an internal load balancer. `vpc_access`
+adds one, in one of two modes:
+
+```hcl
+# Direct VPC egress: instances get IPs from the subnetwork.
+vpc_access = {
+  subnetwork   = "projects/my-project/regions/us-central1/subnetworks/run"
+  network_tags = ["cloud-run"]
+}
+
+# Or a Serverless VPC Access connector you manage elsewhere.
+vpc_access = {
+  connector = "projects/my-project/locations/us-central1/connectors/run"
+}
+```
+
+Set `connector`, or `network` and/or `subnetwork`, never both. `egress` defaults
+to `PRIVATE_RANGES_ONLY`, which sends only private-range traffic through the
+VPC; set `ALL_TRAFFIC` to route everything, for example through Cloud NAT for a
+static outbound IP. `network_tags` work only with Direct VPC egress and are
+useful for targeting firewall rules.
+
 ## Requirements
 
 | Name      | Version  |
@@ -120,6 +145,7 @@ The test suite under [`tests/`](tests) additionally needs Terraform >= 1.7 for
 | `invokers`                      | IAM principals granted `roles/run.invoker` on the service.                 | `list(string)`                                                | `[]`                                           |    no    |
 | `labels`                        | Labels applied to the service.                                             | `map(string)`                                                 | `{}`                                           |    no    |
 | `deletion_protection`           | Prevent Terraform from destroying or replacing the service. Set `false` and apply before destroying. | `bool` | `true` | no |
+| `vpc_access`                    | Direct VPC egress (`network`, `subnetwork`, `network_tags`) or a VPC connector (`connector`), plus `egress` (`PRIVATE_RANGES_ONLY` or `ALL_TRAFFIC`). | `object({ network = optional(string), subnetwork = optional(string), connector = optional(string), egress = optional(string, "PRIVATE_RANGES_ONLY"), network_tags = optional(list(string), []) })` | `null` | no |
 
 ## Outputs
 

@@ -34,6 +34,26 @@ resource "google_cloud_run_v2_service" "this" {
       max_instance_count = var.max_instance_count
     }
 
+    # Outbound access to a VPC, either through Direct VPC egress (network and/or
+    # subnetwork) or through a Serverless VPC Access connector. Omitted entirely when
+    # vpc_access is null, so services without it plan exactly as before.
+    dynamic "vpc_access" {
+      for_each = var.vpc_access == null ? [] : [var.vpc_access]
+      content {
+        connector = vpc_access.value.connector
+        egress    = vpc_access.value.egress
+
+        dynamic "network_interfaces" {
+          for_each = vpc_access.value.connector == null ? [vpc_access.value] : []
+          content {
+            network    = network_interfaces.value.network
+            subnetwork = network_interfaces.value.subnetwork
+            tags       = length(network_interfaces.value.network_tags) > 0 ? network_interfaces.value.network_tags : null
+          }
+        }
+      }
+    }
+
     containers {
       image = var.image
 
